@@ -412,7 +412,7 @@ pipeline {
                                             --build-arg ARTIFACT_NAME=${artifactName} \
                                             --build-arg EXPOSED_PORT=${servicePort} \
                                             -t ${primaryImage} \
-                                            -f ../../docker/Dockerfile .
+                                            -f ../docker/Dockerfile .
                                     """
                                     
                                     if (env.PRIMARY_TAG != env.SECONDARY_TAG) {
