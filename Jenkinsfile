@@ -316,7 +316,6 @@ pipeline {
             }
         }
         
-        
         stage('🐳 Docker Build & Push') {
             when {
                 expression { return params.SKIP_DOCKER_BUILD != true }
@@ -362,13 +361,15 @@ pipeline {
                                         throw new Exception("No JAR file found in target/ directory")
                                     }
                                     
-                                   
+                                    // Lấy artifact name (không có extension .jar)
                                     def artifactName = sh(
                                         script: 'basename $(ls target/*.jar | head -1) .jar',
                                         returnStdout: true
                                     ).trim()
+                                    
                                     echo "✅ Found JAR: ${artifactName}.jar"
-
+                                    
+                                    // Xác định port cho từng service
                                     def servicePort = ""
                                     switch(service.name) {
                                         case 'spring-petclinic-config-server':
@@ -399,26 +400,42 @@ pipeline {
                                             servicePort = "8080"
                                     }
                                     
+                                    // Build Docker images với shared Dockerfile
                                     def primaryImage = "${env.DOCKERHUB_USR}/${service.name}:${env.PRIMARY_TAG}"
                                     def secondaryImage = "${env.DOCKERHUB_USR}/${service.name}:${env.SECONDARY_TAG}"
                                     
-                                    echo "🐳 Building Docker image with Dockerfile..."
+                                    echo "🐳 Building Docker image with shared Dockerfile..."
                                     echo "   📋 Artifact: ${artifactName}"
                                     echo "   🔌 Port: ${servicePort}"
                                     echo "   🐳 Image: ${primaryImage}"
-
+                                    
+                                    // Debug: List files in build context
+                                    sh '''
+                                        echo "=== Build Context Debug ==="
+                                        echo "Current directory: $(pwd)"
+                                        echo "Files in current directory:"
+                                        ls -la
+                                        echo "Files in target directory:"
+                                        ls -la target/
+                                        echo "JAR files:"
+                                        ls -la target/*.jar
+                                    '''
+                                    
+                                    // Sử dụng shared Dockerfile với correct path
                                     sh """
                                         docker build \
-                                            --build-arg ARTIFACT_NAME=${artifactName} \
+                                            --build-arg ARTIFACT_NAME=target/${artifactName} \
                                             --build-arg EXPOSED_PORT=${servicePort} \
                                             -t ${primaryImage} \
                                             -f ../docker/Dockerfile .
                                     """
                                     
+                                    // Tag with secondary tag if different
                                     if (env.PRIMARY_TAG != env.SECONDARY_TAG) {
                                         sh "docker tag ${primaryImage} ${secondaryImage}"
                                     }
                                     
+                                    // Get image size
                                     def imageSize = sh(
                                         script: "docker images ${primaryImage} --format '{{.Size}}'",
                                         returnStdout: true
@@ -426,6 +443,7 @@ pipeline {
                                     
                                     echo "✅ Image built successfully - Size: ${imageSize}"
                                     
+                                    // Push images
                                     echo "📤 Pushing to Docker Hub..."
                                     sh "docker push ${primaryImage}"
                                     
@@ -440,6 +458,7 @@ pipeline {
                                     echo "   🏷️ Tags: ${env.PRIMARY_TAG}, ${env.SECONDARY_TAG}"
                                     echo "   📦 Repository: https://hub.docker.com/r/${env.DOCKERHUB_USR}/${service.name}"
                                     
+                                    // Clean up local image to save space
                                     sh "docker rmi ${primaryImage} || true"
                                     if (env.PRIMARY_TAG != env.SECONDARY_TAG) {
                                         sh "docker rmi ${secondaryImage} || true"
@@ -455,6 +474,7 @@ pipeline {
                         }
                     }
                     
+                    // Store results for summary
                     env.DOCKER_BUILD_RESULTS = buildResults.collect { k, v -> "${k}:${v}" }.join('|')
                     env.DOCKER_SUCCESS_COUNT = successCount.toString()
                     env.DOCKER_TOTAL_COUNT = services.findAll { it.changed == "true" }.size().toString()
