@@ -35,40 +35,59 @@ pipeline {
     }
     
     stages {
-        stage('🚀 Initialize') {
-            steps {
-                script {
-                    echo "🎯 Starting CI Pipeline for PetClinic Microservices"
-                    echo "📍 Branch: ${env.BRANCH_NAME}"
-                    echo "🔨 Build Number: ${env.BUILD_NUMBER}"
-                    
-                    // Get commit info
-                    env.COMMIT_ID = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-                    env.COMMIT_MESSAGE = sh(script: 'git log -1 --pretty=%B', returnStdout: true).trim()
-                    
-                    // Create image tags based on branch
-                    if (env.BRANCH_NAME == 'main') {
-                        env.PRIMARY_TAG = 'latest'
-                        env.SECONDARY_TAG = env.COMMIT_ID
-                    } else {
-                        env.PRIMARY_TAG = "${env.BRANCH_NAME}-${env.COMMIT_ID}".replace('/', '-')
-                        env.SECONDARY_TAG = env.BRANCH_NAME.replace('/', '-')
-                    }
-                    
-                    echo "=== Build Information ==="
-                    echo "📍 Branch: ${env.BRANCH_NAME}"
-                    echo "🔖 Commit ID: ${env.COMMIT_ID}"
-                    echo "🏷️ Primary Tag: ${env.PRIMARY_TAG}"
-                    echo "🏷️ Secondary Tag: ${env.SECONDARY_TAG}"
-                    echo "💬 Commit: ${env.COMMIT_MESSAGE}"
-                }
-            }
-        }
-        
         stage('Checkout') {
             steps {
                 checkout scm
                 sh "git fetch --all"
+            }
+        }
+
+        stage('🚀 Initialize') {
+            steps {
+                script {
+                    echo "🎯 Starting CI Pipeline for PetClinic Microservices"
+
+                    // Short commit & message
+                    env.COMMIT_ID      = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.COMMIT_MESSAGE = sh(script: 'git log -1 --pretty=%B',   returnStdout: true).trim()
+
+                    def tagOnHead = sh(
+                        script: 'git describe --exact-match --tags $(git rev-parse HEAD) || true',
+                        returnStdout: true
+                    ).trim()
+
+                    if (tagOnHead ==~ /^v\d+\.\d+\.\d+$/) {
+                        // Ensure the tagged commit is reachable from main
+                        def onMain = sh(
+                            script: 'git merge-base --is-ancestor origin/main HEAD && echo true || echo false',
+                            returnStdout: true
+                        ).trim() == 'true'
+
+                        if (onMain) {
+                            env.IS_TAG_BUILD = "true"
+                            env.PRIMARY_TAG  = tagOnHead        // v1.1.1
+                            env.SECONDARY_TAG = 'latest'
+                            echo "🔖 Tag build detected – ${tagOnHead} on main"
+                        }
+                    }
+
+                    if (env.IS_TAG_BUILD == 'false') {
+                        if (env.BRANCH_NAME == 'main') {
+                            env.PRIMARY_TAG   = 'latest'
+                            env.SECONDARY_TAG = env.COMMIT_ID
+                        } else {
+                            env.PRIMARY_TAG   = "${env.BRANCH_NAME}-${env.COMMIT_ID}".replace('/', '-')
+                            env.SECONDARY_TAG = env.BRANCH_NAME.replace('/', '-')
+                        }
+                    }
+
+                    echo "=== Build Information ==="
+                    echo "📍 Branch/Ref : ${env.BRANCH_NAME}"
+                    echo "🔖 Commit ID  : ${env.COMMIT_ID}"
+                    echo "🏷️  Primary Tag : ${env.PRIMARY_TAG}"
+                    echo "🏷️  Secondary Tag : ${env.SECONDARY_TAG}"
+                    echo "💬 Commit msg : ${env.COMMIT_MESSAGE}"
+                }
             }
         }
         
@@ -431,6 +450,35 @@ pipeline {
                     env.DOCKER_BUILD_RESULTS = buildResults.collect { k, v -> "${k}:${v}" }.join('|')
                     env.DOCKER_SUCCESS_COUNT = successCount.toString()
                     env.DOCKER_TOTAL_COUNT = services.findAll { it.changed == "true" }.size().toString()
+                }
+            }
+        }
+
+        stage('📦 Update Helm Charts repo') {
+            when { expression { env.IS_TAG_BUILD == 'true' } }
+            steps {
+                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                    script {
+                        echo "🔄 Cloning spring-petclinic-config to update image tags → ${env.PRIMARY_TAG}"
+                        sh '''
+                            rm -rf spring-petclinic-config || true
+                            git clone https://$GITHUB_TOKEN@github.com/Tondeptrai23/spring-petclinic-config.git
+                            cd spring-petclinic-config
+                            git config user.email "22120375@student.hcmus.edu.vn"
+                            git config user.name  "Tondeptrai23"
+
+                            # Update every 'tag:' entry in the staging values file
+                            sed -i -E "s/tag: .*/tag: ${PRIMARY_TAG}/g" helm-charts/staging/values.yaml
+
+                            if git diff --quiet; then
+                                echo '⚠️  No tag changes detected – nothing to commit'
+                            else
+                                git add helm-charts/staging/values.yaml
+                                git commit -m "chore(ci): bump image tags to ${PRIMARY_TAG}"
+                                git push origin main
+                            fi
+                        '''
+                    }
                 }
             }
         }
