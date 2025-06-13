@@ -39,6 +39,12 @@ management:
         http:
           server:
             requests: true
+  opentelemetry:
+    resource-attributes:
+      service.name: ${spring.application.name:admin-server}
+      service.version: ${application.version:1.0.0}
+      namespace: ${NAMESPACE:default}
+
 
 logging:
   pattern:
