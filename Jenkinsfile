@@ -457,13 +457,6 @@ pipeline {
                         }
                         
                         if (successfulImages.size() > 0) {
-                            echo ""
-                            echo "🎯 Successfully built and pushed images:"
-                            successfulImages.each { service ->
-                                echo "   docker pull ${env.DOCKERHUB_USR}/${service}:${env.PRIMARY_TAG}"
-                            }
-                            echo ""
-                            echo "🌐 Docker Hub repositories:"
                             successfulImages.each { service ->
                                 echo "   https://hub.docker.com/r/${env.DOCKERHUB_USR}/${service}"
                             }
