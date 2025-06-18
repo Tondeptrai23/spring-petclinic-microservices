@@ -8,34 +8,9 @@ spring:
     config:
       server:
         git:
-          uri: https://github.com/spring-petclinic/spring-petclinic-microservices-config
+          uri: https://github.com/Tondeptrai23/spring-petclinic-microservices-config
           default-label: main
         native:
           search-locations: file:///${GIT_REPO}  
-management:
-  endpoints:
-    web:
-      exposure:
-        include: "*"
-  endpoint:
-    health:
-      show-details: always
-  # ✅ SỬA: thêm tracing config đúng structure
-  tracing:
-    enabled: true
-    sampling:
-      probability: 1.0
-  zipkin:
-    tracing:
-      enabled: true
-      endpoint: "http://zipkin.tracing.svc.cluster.local:9411/api/v2/spans"
-  observations:
-    key-values:
-      service.name: ${spring.application.name:config-server}
-      namespace: ${NAMESPACE:default}
 
-logging:
-  pattern:
-    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
-  level:
-    io.micrometer.tracing: DEBUG
+
