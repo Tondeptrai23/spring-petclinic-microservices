@@ -28,11 +28,11 @@ management:
   zipkin:
     tracing:
       enabled: true
-      endpoint: "http://zipkin.tracing.svc.cluster.local:9411/api/v2/spans"  # ✅ SỬA: namespace
-  metrics:
-    export:
-      prometheus:
-        enabled: true
+      endpoint: "http://zipkin.tracing.svc.cluster.local:9411/api/v2/spans"
+  observations:
+    key-values:
+      service.name: ${spring.application.name:config-server}
+      namespace: ${NAMESPACE:default}
 
 logging:
   pattern:

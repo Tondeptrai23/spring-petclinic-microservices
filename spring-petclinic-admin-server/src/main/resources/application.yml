@@ -39,6 +39,11 @@ management:
         http:
           server:
             requests: true
+  observations:
+    key-values:
+      service.name: ${spring.application.name:admin-server}
+      namespace: ${NAMESPACE:default}
+
 
 logging:
   pattern:

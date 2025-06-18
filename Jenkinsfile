@@ -66,8 +66,8 @@ pipeline {
                             env.PRIMARY_TAG   = 'latest'
                             env.SECONDARY_TAG = env.COMMIT_ID
                         } else {
-                            env.PRIMARY_TAG   = "${env.BRANCH_NAME}-${env.COMMIT_ID}".replace('/', '-')
-                            env.SECONDARY_TAG = env.BRANCH_NAME.replace('/', '-')
+                            env.PRIMARY_TAG   = "${env.COMMIT_ID}".replace('/', '-')
+                            env.SECONDARY_TAG = "${env.COMMIT_ID}".replace('/', '-')
                         }
                     }
 
