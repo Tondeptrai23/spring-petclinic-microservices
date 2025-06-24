@@ -512,13 +512,13 @@ pipeline {
                                 # Determine commit message based on what was updated
                                 COMMIT_MSG="chore(ci): "
                                 if [ "${IS_TAG_BUILD}" = "true" ] && [ "${IS_MAIN_BUILD}" = "true" ]; then
-                                    COMMIT_MSG+="bump image tags to ${PRIMARY_TAG} for staging and dev"
+                                    COMMIT_MSG="${COMMIT_MSG}bump image tags to ${PRIMARY_TAG} for staging and dev"
                                     git add helm-charts/staging/values.yaml helm-charts/dev/values.yaml
                                 elif [ "${IS_TAG_BUILD}" = "true" ]; then
-                                    COMMIT_MSG+="[staging] bump image tags to ${PRIMARY_TAG}"
+                                    COMMIT_MSG="${COMMIT_MSG}[staging] bump image tags to ${PRIMARY_TAG}"
                                     git add helm-charts/staging/values.yaml
                                 else
-                                    COMMIT_MSG+="[dev] bump image tags to ${PRIMARY_TAG}"
+                                    COMMIT_MSG="${COMMIT_MSG}[dev] bump image tags to ${PRIMARY_TAG}"
                                     git add helm-charts/dev/values.yaml
                                 fi
 
