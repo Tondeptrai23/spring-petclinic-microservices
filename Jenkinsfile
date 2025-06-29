@@ -501,10 +501,10 @@ pipeline {
                                 CHANGED=true
                             fi
 
-                            # For main branch builds, update dev environment
+                            # For main branch builds, update dev environment with commit hash for better traceability
                             if [ "${IS_MAIN_BUILD}" = "true" ]; then
-                                echo "📦 Updating dev environment with tag ${PRIMARY_TAG}"
-                                sed -i -E "s/tag: .*/tag: ${PRIMARY_TAG}/g" helm-charts/dev/values.yaml
+                                echo "📦 Updating dev environment with tag ${SECONDARY_TAG}"
+                                sed -i -E "s/tag: .*/tag: ${SECONDARY_TAG}/g" helm-charts/dev/values.yaml
                                 CHANGED=true
                             fi
 
@@ -518,7 +518,7 @@ pipeline {
                                     COMMIT_MSG="${COMMIT_MSG}[staging] bump image tags to ${PRIMARY_TAG}"
                                     git add helm-charts/staging/values.yaml
                                 else
-                                    COMMIT_MSG="${COMMIT_MSG}[dev] bump image tags to ${PRIMARY_TAG}"
+                                    COMMIT_MSG="${COMMIT_MSG}[dev] bump image tags to ${SECONDARY_TAG}"
                                     git add helm-charts/dev/values.yaml
                                 fi
 
