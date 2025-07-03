@@ -55,6 +55,7 @@ pipeline {
                                             script: 'git log -1 --pretty=%B').trim()
 
                     env.IS_TAG_BUILD = env.TAG_NAME?.startsWith("v") ? true : false
+                    env.IS_MAIN_BUILD = env.BRANCH_NAME == 'main' ? true : false
 
                     if (env.IS_TAG_BUILD.toBoolean()) {
                         env.PRIMARY_TAG   = env.TAG_NAME          // e.g. v1.2.3
@@ -475,11 +476,15 @@ pipeline {
         }
 
         stage('📦 Update Helm Charts repo') {
-            when { expression { env.IS_TAG_BUILD.toBoolean() } }
+            when { 
+                expression { 
+                    return env.IS_TAG_BUILD.toBoolean() || env.IS_MAIN_BUILD.toBoolean()
+                } 
+            }
             steps {
                 withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
                     script {
-                        echo "🔄 Cloning spring-petclinic-config to update image tags → ${env.PRIMARY_TAG}"
+                        echo "🔄 Cloning spring-petclinic-config to update image tags"
                         sh '''
                             rm -rf spring-petclinic-config || true
                             git clone https://$GITHUB_TOKEN@github.com/Tondeptrai23/spring-petclinic-config.git
@@ -487,15 +492,40 @@ pipeline {
                             git config user.email "ci.bot@jenkins.local"
                             git config user.name  "jenkins.ci.bot"
 
-                            # Update every 'tag:' entry in the staging values file
-                            sed -i -E "s/tag: .*/tag: ${PRIMARY_TAG}/g" helm-charts/staging/values.yaml
+                            CHANGED=false
 
-                            if git diff --quiet; then
-                                echo '⚠️  No tag changes detected – nothing to commit'
-                            else
-                                git add helm-charts/staging/values.yaml
-                                git commit -m "chore(ci): bump image tags to ${PRIMARY_TAG}"
+                            # For tag builds, update staging environment
+                            if [ "${IS_TAG_BUILD}" = "true" ]; then
+                                echo "📦 Updating staging environment with tag ${PRIMARY_TAG}"
+                                sed -i -E "s/tag: .*/tag: ${PRIMARY_TAG}/g" helm-charts/staging/values.yaml
+                                CHANGED=true
+                            fi
+
+                            # For main branch builds, update dev environment with commit hash for better traceability
+                            if [ "${IS_MAIN_BUILD}" = "true" ]; then
+                                echo "📦 Updating dev environment with tag ${SECONDARY_TAG}"
+                                sed -i -E "s/tag: .*/tag: ${SECONDARY_TAG}/g" helm-charts/dev/values.yaml
+                                CHANGED=true
+                            fi
+
+                            if [ "$CHANGED" = "true" ] && ! git diff --quiet; then
+                                # Determine commit message based on what was updated
+                                COMMIT_MSG="chore(ci): "
+                                if [ "${IS_TAG_BUILD}" = "true" ] && [ "${IS_MAIN_BUILD}" = "true" ]; then
+                                    COMMIT_MSG="${COMMIT_MSG}bump image tags to ${PRIMARY_TAG} for staging and dev"
+                                    git add helm-charts/staging/values.yaml helm-charts/dev/values.yaml
+                                elif [ "${IS_TAG_BUILD}" = "true" ]; then
+                                    COMMIT_MSG="${COMMIT_MSG}[staging] bump image tags to ${PRIMARY_TAG}"
+                                    git add helm-charts/staging/values.yaml
+                                else
+                                    COMMIT_MSG="${COMMIT_MSG}[dev] bump image tags to ${SECONDARY_TAG}"
+                                    git add helm-charts/dev/values.yaml
+                                fi
+
+                                git commit -m "$COMMIT_MSG"
                                 git push origin main
+                            else
+                                echo '⚠️  No tag changes detected – nothing to commit'
                             fi
                         '''
                     }
