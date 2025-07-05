@@ -498,7 +498,8 @@ pipeline {
                             [name: 'genai-service', changed: env.GENAI_SERVICE_CHANGED]
                         ]
                         
-                        sh '''
+                        // Build the complete shell script with all updates
+                        def shellScript = '''
                             rm -rf spring-petclinic-config || true
                             git clone https://$GITHUB_TOKEN@github.com/Tondeptrai23/spring-petclinic-config.git
                             cd spring-petclinic-config
@@ -514,32 +515,35 @@ pipeline {
                                 sed -i -E "s/tag: .*/tag: ${PRIMARY_TAG}/g" helm-charts/staging/values.yaml
                                 CHANGED=true
                             fi
+
+                            # For main branch builds, update only changed services in dev environment
+                            if [ "${IS_MAIN_BUILD}" = "true" ]; then
+                                echo "📦 Updating dev environment - selective service updates"
                         '''
                         
-                        // For main branch builds, update only changed services in dev environment
+                        // Add updates for each changed service
                         if (env.IS_MAIN_BUILD.toBoolean()) {
-                            echo "📦 Updating dev environment - selective service updates"
-                            
                             helmServices.each { service ->
                                 if (service.changed == "true") {
                                     echo "📦 Updating ${service.name} tag to ${env.SECONDARY_TAG} in dev environment"
-                                    sh """
-                                        cd spring-petclinic-config
-                                        # Update specific service tag in dev values.yaml
-                                        sed -i -E "/${service.name}:/,/tag:/{s/tag: .*/tag: ${env.SECONDARY_TAG}/}" helm-charts/dev/values.yaml
-                                        CHANGED=true
-                                        if [ -z "\$UPDATED_SERVICES" ]; then
-                                            UPDATED_SERVICES="${service.name}"
-                                        else
-                                            UPDATED_SERVICES="\$UPDATED_SERVICES, ${service.name}"
-                                        fi
+                                    shellScript += """
+                                echo "📦 Updating ${service.name} tag to ${env.SECONDARY_TAG}"
+                                sed -i -E "/${service.name}:/,/tag:/{s/tag: .*/tag: ${env.SECONDARY_TAG}/}" helm-charts/dev/values.yaml
+                                CHANGED=true
+                                if [ -z "\$UPDATED_SERVICES" ]; then
+                                    UPDATED_SERVICES="${service.name}"
+                                else
+                                    UPDATED_SERVICES="\$UPDATED_SERVICES, ${service.name}"
+                                fi
                                     """
                                 }
                             }
                         }
                         
-                        sh '''
-                            cd spring-petclinic-config
+                        // Complete the shell script
+                        shellScript += '''
+                            fi
+
                             if [ "$CHANGED" = "true" ] && ! git diff --quiet; then
                                 # Determine commit message based on what was updated
                                 COMMIT_MSG="chore(ci): "
@@ -561,6 +565,9 @@ pipeline {
                                 echo '⚠️  No tag changes detected – nothing to commit'
                             fi
                         '''
+                        
+                        // Execute the complete shell script
+                        sh shellScript
                     }
                 }
             }
