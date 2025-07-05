@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PetResourceTest {
 
     @Autowired
-    MockMvc mvc; // test 2
+    MockMvc mvc; // test
 
     @MockBean
     PetRepository petRepository;
