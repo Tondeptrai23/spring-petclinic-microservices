@@ -485,6 +485,19 @@ pipeline {
                 withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
                     script {
                         echo "🔄 Cloning spring-petclinic-config to update image tags"
+                        
+                        // Define service mappings for Helm updates
+                        def helmServices = [
+                            [name: 'config-server', changed: env.CONFIG_SERVER_CHANGED],
+                            [name: 'discovery-server', changed: env.DISCOVERY_SERVER_CHANGED],
+                            [name: 'admin-server', changed: env.ADMIN_SERVER_CHANGED],
+                            [name: 'api-gateway', changed: env.API_GATEWAY_CHANGED],
+                            [name: 'customers-service', changed: env.CUSTOMERS_SERVICE_CHANGED],
+                            [name: 'visits-service', changed: env.VISITS_SERVICE_CHANGED],
+                            [name: 'vets-service', changed: env.VETS_SERVICE_CHANGED],
+                            [name: 'genai-service', changed: env.GENAI_SERVICE_CHANGED]
+                        ]
+                        
                         sh '''
                             rm -rf spring-petclinic-config || true
                             git clone https://$GITHUB_TOKEN@github.com/Tondeptrai23/spring-petclinic-config.git
@@ -493,37 +506,57 @@ pipeline {
                             git config user.name  "jenkins.ci.bot"
 
                             CHANGED=false
+                            UPDATED_SERVICES=""
 
-                            # For tag builds, update staging environment
+                            # For tag builds, update staging environment (all services)
                             if [ "${IS_TAG_BUILD}" = "true" ]; then
                                 echo "📦 Updating staging environment with tag ${PRIMARY_TAG}"
                                 sed -i -E "s/tag: .*/tag: ${PRIMARY_TAG}/g" helm-charts/staging/values.yaml
                                 CHANGED=true
                             fi
-
-                            # For main branch builds, update dev environment with commit hash for better traceability
-                            if [ "${IS_MAIN_BUILD}" = "true" ]; then
-                                echo "📦 Updating dev environment with tag ${SECONDARY_TAG}"
-                                sed -i -E "s/tag: .*/tag: ${SECONDARY_TAG}/g" helm-charts/dev/values.yaml
-                                CHANGED=true
-                            fi
-
+                        '''
+                        
+                        // For main branch builds, update only changed services in dev environment
+                        if (env.IS_MAIN_BUILD.toBoolean()) {
+                            echo "📦 Updating dev environment - selective service updates"
+                            
+                            helmServices.each { service ->
+                                if (service.changed == "true") {
+                                    echo "📦 Updating ${service.name} tag to ${env.SECONDARY_TAG} in dev environment"
+                                    sh """
+                                        cd spring-petclinic-config
+                                        # Update specific service tag in dev values.yaml
+                                        sed -i -E "/${service.name}:/,/tag:/{s/tag: .*/tag: ${env.SECONDARY_TAG}/}" helm-charts/dev/values.yaml
+                                        CHANGED=true
+                                        if [ -z "\$UPDATED_SERVICES" ]; then
+                                            UPDATED_SERVICES="${service.name}"
+                                        else
+                                            UPDATED_SERVICES="\$UPDATED_SERVICES, ${service.name}"
+                                        fi
+                                    """
+                                }
+                            }
+                        }
+                        
+                        sh '''
+                            cd spring-petclinic-config
                             if [ "$CHANGED" = "true" ] && ! git diff --quiet; then
                                 # Determine commit message based on what was updated
                                 COMMIT_MSG="chore(ci): "
                                 if [ "${IS_TAG_BUILD}" = "true" ] && [ "${IS_MAIN_BUILD}" = "true" ]; then
-                                    COMMIT_MSG="${COMMIT_MSG}bump image tags to ${PRIMARY_TAG} for staging and dev"
+                                    COMMIT_MSG="${COMMIT_MSG}bump image tags to ${PRIMARY_TAG} for staging and selected services in dev"
                                     git add helm-charts/staging/values.yaml helm-charts/dev/values.yaml
                                 elif [ "${IS_TAG_BUILD}" = "true" ]; then
                                     COMMIT_MSG="${COMMIT_MSG}[staging] bump image tags to ${PRIMARY_TAG}"
                                     git add helm-charts/staging/values.yaml
                                 else
-                                    COMMIT_MSG="${COMMIT_MSG}[dev] bump image tags to ${SECONDARY_TAG}"
+                                    COMMIT_MSG="${COMMIT_MSG}[dev] bump image tags to ${SECONDARY_TAG} for: $UPDATED_SERVICES"
                                     git add helm-charts/dev/values.yaml
                                 fi
 
                                 git commit -m "$COMMIT_MSG"
                                 git push origin main
+                                echo "✅ Successfully updated Helm charts"
                             else
                                 echo '⚠️  No tag changes detected – nothing to commit'
                             fi
