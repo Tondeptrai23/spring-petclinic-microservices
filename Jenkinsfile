@@ -498,76 +498,81 @@ pipeline {
                             [name: 'genai-service', changed: env.GENAI_SERVICE_CHANGED]
                         ]
                         
-                        // Build the complete shell script with all updates
-                        def shellScript = '''
+                        // Initialize tracking variables
+                        env.HELM_CHANGED = "false"
+                        env.UPDATED_SERVICES = ""
+                        
+                        sh '''
                             rm -rf spring-petclinic-config || true
                             git clone https://$GITHUB_TOKEN@github.com/Tondeptrai23/spring-petclinic-config.git
                             cd spring-petclinic-config
                             git config user.email "ci.bot@jenkins.local"
                             git config user.name  "jenkins.ci.bot"
-
-                            CHANGED=false
-                            UPDATED_SERVICES=""
-
-                            # For tag builds, update staging environment (all services)
-                            if [ "${IS_TAG_BUILD}" = "true" ]; then
-                                echo "📦 Updating staging environment with tag ${PRIMARY_TAG}"
-                                sed -i -E "s/tag: .*/tag: ${PRIMARY_TAG}/g" helm-charts/staging/values.yaml
-                                CHANGED=true
-                            fi
-
-                            # For main branch builds, update only changed services in dev environment
-                            if [ "${IS_MAIN_BUILD}" = "true" ]; then
-                                echo "📦 Updating dev environment - selective service updates"
                         '''
                         
-                        // Add updates for each changed service
+                        // For tag builds, update staging environment (all services)
+                        if (env.IS_TAG_BUILD.toBoolean()) {
+                            echo "📦 Updating staging environment with tag ${env.PRIMARY_TAG}"
+                            sh '''
+                                cd spring-petclinic-config
+                                sed -i -E "s/tag: .*/tag: ${PRIMARY_TAG}/g" helm-charts/staging/values.yaml
+                            '''
+                            env.HELM_CHANGED = "true"
+                        }
+                        
+                        // For main branch builds, update only changed services in dev environment
                         if (env.IS_MAIN_BUILD.toBoolean()) {
+                            echo "📦 Updating dev environment - selective service updates"
+                            
+                            def updatedServicesList = []
                             helmServices.each { service ->
                                 if (service.changed == "true") {
                                     echo "📦 Updating ${service.name} tag to ${env.SECONDARY_TAG} in dev environment"
-                                    shellScript += """
-                                echo "📦 Updating ${service.name} tag to ${env.SECONDARY_TAG}"
-                                sed -i -E "/${service.name}:/,/tag:/{s/tag: .*/tag: ${env.SECONDARY_TAG}/}" helm-charts/dev/values.yaml
-                                CHANGED=true
-                                if [ -z "\$UPDATED_SERVICES" ]; then
-                                    UPDATED_SERVICES="${service.name}"
-                                else
-                                    UPDATED_SERVICES="\$UPDATED_SERVICES, ${service.name}"
-                                fi
+                                    sh """
+                                        cd spring-petclinic-config
+                                        sed -i -E "/${service.name}:/,/tag:/{s/tag: .*/tag: ${env.SECONDARY_TAG}/}" helm-charts/dev/values.yaml
                                     """
+                                    updatedServicesList.add(service.name)
+                                    env.HELM_CHANGED = "true"
                                 }
+                            }
+                            
+                            if (updatedServicesList.size() > 0) {
+                                env.UPDATED_SERVICES = updatedServicesList.join(', ')
                             }
                         }
                         
-                        // Complete the shell script
-                        shellScript += '''
-                            fi
+                        // Check for changes and commit
+                        if (env.HELM_CHANGED == "true") {
+                            sh '''
+                                cd spring-petclinic-config
+                                
+                                if ! git diff --quiet; then
+                                    echo "✅ Changes detected, proceeding with commit"
+                                    
+                                    # Determine commit message based on what was updated
+                                    COMMIT_MSG="chore(ci): "
+                                    if [ "${IS_TAG_BUILD}" = "true" ] && [ "${IS_MAIN_BUILD}" = "true" ]; then
+                                        COMMIT_MSG="${COMMIT_MSG}bump image tags to ${PRIMARY_TAG} for staging and selected services in dev"
+                                        git add helm-charts/staging/values.yaml helm-charts/dev/values.yaml
+                                    elif [ "${IS_TAG_BUILD}" = "true" ]; then
+                                        COMMIT_MSG="${COMMIT_MSG}[staging] bump image tags to ${PRIMARY_TAG}"
+                                        git add helm-charts/staging/values.yaml
+                                    else
+                                        COMMIT_MSG="${COMMIT_MSG}[dev] bump image tags to ${SECONDARY_TAG} for: ${UPDATED_SERVICES}"
+                                        git add helm-charts/dev/values.yaml
+                                    fi
 
-                            if [ "$CHANGED" = "true" ] && ! git diff --quiet; then
-                                # Determine commit message based on what was updated
-                                COMMIT_MSG="chore(ci): "
-                                if [ "${IS_TAG_BUILD}" = "true" ] && [ "${IS_MAIN_BUILD}" = "true" ]; then
-                                    COMMIT_MSG="${COMMIT_MSG}bump image tags to ${PRIMARY_TAG} for staging and selected services in dev"
-                                    git add helm-charts/staging/values.yaml helm-charts/dev/values.yaml
-                                elif [ "${IS_TAG_BUILD}" = "true" ]; then
-                                    COMMIT_MSG="${COMMIT_MSG}[staging] bump image tags to ${PRIMARY_TAG}"
-                                    git add helm-charts/staging/values.yaml
+                                    git commit -m "$COMMIT_MSG"
+                                    git push origin main
+                                    echo "✅ Successfully updated Helm charts"
                                 else
-                                    COMMIT_MSG="${COMMIT_MSG}[dev] bump image tags to ${SECONDARY_TAG} for: $UPDATED_SERVICES"
-                                    git add helm-charts/dev/values.yaml
+                                    echo "⚠️ HELM_CHANGED=true but git diff shows no changes"
                                 fi
-
-                                git commit -m "$COMMIT_MSG"
-                                git push origin main
-                                echo "✅ Successfully updated Helm charts"
-                            else
-                                echo '⚠️  No tag changes detected – nothing to commit'
-                            fi
-                        '''
-                        
-                        // Execute the complete shell script
-                        sh shellScript
+                            '''
+                        } else {
+                            echo "⚠️ No services changed, skipping Helm chart updates"
+                        }
                     }
                 }
             }
