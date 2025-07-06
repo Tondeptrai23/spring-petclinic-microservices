@@ -42,12 +42,12 @@ pipeline {
             }
         }
 
-        stage('🚀 Initialize') {
+        stage('Initialize') {
             steps {
                 script {
-                    echo "🎯 Starting CI Pipeline for PetClinic Microservices"
-                    echo "📍 Branch: ${env.BRANCH_NAME}"
-                    echo "🔨 Build Number: ${env.BUILD_NUMBER}"
+                    echo "Starting CI Pipeline for PetClinic Microservices"
+                    echo "Branch: ${env.BRANCH_NAME}"
+                    echo "Build Number: ${env.BUILD_NUMBER}"
 
                     env.COMMIT_ID       = sh(returnStdout: true,
                                             script: 'git rev-parse --short HEAD').trim()
@@ -60,7 +60,7 @@ pipeline {
                     if (env.IS_TAG_BUILD.toBoolean()) {
                         env.PRIMARY_TAG   = env.TAG_NAME          // e.g. v1.2.3
                         env.SECONDARY_TAG = env.TAG_NAME                    
-                        echo "🏷️  Detected tag build: ${env.TAG_NAME}"
+                        echo "Detected tag build: ${env.TAG_NAME}"
                     } else {
                         // Normal branch / PR build (your original logic)
                         if (env.BRANCH_NAME == 'main') {
@@ -74,11 +74,11 @@ pipeline {
 
                     /* ---------- 3.  DIAGNOSTICS ---------- */
                     echo '=== Build Information ==='
-                    echo "📍 Ref type   : ${env.IS_TAG_BUILD.toBoolean() ? 'TAG' : 'BRANCH'}"
-                    echo "🔖 Commit ID  : ${env.COMMIT_ID}"
-                    echo "🏷️  Primary   : ${env.PRIMARY_TAG}"
-                    echo "🏷️  Secondary : ${env.SECONDARY_TAG}"
-                    echo "💬 Commit msg : ${env.COMMIT_MESSAGE}"
+                    echo "Ref type   : ${env.IS_TAG_BUILD.toBoolean() ? 'TAG' : 'BRANCH'}"
+                    echo "Commit ID  : ${env.COMMIT_ID}"
+                    echo " Primary   : ${env.PRIMARY_TAG}"
+                    echo " Secondary : ${env.SECONDARY_TAG}"
+                    echo "Commit msg : ${env.COMMIT_MESSAGE}"
                 }
             }
         }
@@ -306,7 +306,7 @@ pipeline {
         }
         
         
-        stage('🐳 Docker Build & Push') {
+        stage('Docker Build & Push') {
             when {
                 expression { return params.SKIP_DOCKER_BUILD != true }
             }
@@ -336,14 +336,14 @@ pipeline {
                         if (service.changed == "true") {
                             echo ""
                             echo "=" * 60
-                            echo "🔨 Building Docker image for: ${service.name}"
+                            echo "Building Docker image for: ${service.name}"
                             echo "=" * 60
                             
                             try {
                                 dir(service.path) {
                                     // Check if Dockerfile exists
                                     if (!fileExists('Dockerfile')) {
-                                        echo "⚠️ No Dockerfile found in ${service.path}, skipping Docker build..."
+                                        echo "No Dockerfile found in ${service.path}, skipping Docker build..."
                                         buildResults[service.name] = 'SKIPPED - No Dockerfile'
                                         return
                                     }
@@ -363,13 +363,13 @@ pipeline {
                                         returnStdout: true
                                     ).trim()
                                     
-                                    echo "✅ Found JAR: ${jarName}"
+                                    echo "Found JAR: ${jarName}"
                                     
                                     // Build Docker images
                                     def primaryImage = "${env.DOCKERHUB_USR}/${service.name}:${env.PRIMARY_TAG}"
                                     def secondaryImage = "${env.DOCKERHUB_USR}/${service.name}:${env.SECONDARY_TAG}"
                                     
-                                    echo "🐳 Building Docker image..."
+                                    echo "Building Docker image..."
                                     sh "docker build -t ${primaryImage} ."
                                     
                                     // Tag with secondary tag if different
@@ -383,10 +383,10 @@ pipeline {
                                         returnStdout: true
                                     ).trim()
                                     
-                                    echo "✅ Image built successfully - Size: ${imageSize}"
+                                    echo "Image built successfully - Size: ${imageSize}"
                                     
                                     // Push images
-                                    echo "📤 Pushing to Docker Hub..."
+                                    echo "Pushing to Docker Hub..."
                                     sh "docker push ${primaryImage}"
                                     
                                     if (env.PRIMARY_TAG != env.SECONDARY_TAG) {
@@ -396,9 +396,9 @@ pipeline {
                                     buildResults[service.name] = 'SUCCESS'
                                     successCount++
                                     
-                                    echo "✅ Successfully pushed ${service.name}"
-                                    echo "   🏷️ Tags: ${env.PRIMARY_TAG}, ${env.SECONDARY_TAG}"
-                                    echo "   📦 Repository: https://hub.docker.com/r/${env.DOCKERHUB_USR}/${service.name}"
+                                    echo "Successfully pushed ${service.name}"
+                                    echo "   Tags: ${env.PRIMARY_TAG}, ${env.SECONDARY_TAG}"
+                                    echo "   Repository: https://hub.docker.com/r/${env.DOCKERHUB_USR}/${service.name}"
                                     
                                     // Clean up local image to save space
                                     sh "docker rmi ${primaryImage} || true"
@@ -409,10 +409,10 @@ pipeline {
                                 
                             } catch (Exception e) {
                                 buildResults[service.name] = "FAILED: ${e.getMessage()}"
-                                echo "❌ Docker build failed for ${service.name}: ${e.getMessage()}"
+                                echo "Docker build failed for ${service.name}: ${e.getMessage()}"
                             }
                         } else {
-                            echo "⏭️ Skipping ${service.name} (no changes detected)"
+                            echo "Skipping ${service.name} (no changes detected)"
                         }
                     }
                     
@@ -424,17 +424,17 @@ pipeline {
             }
         }
         
-        stage('📊 Build Summary') {
+        stage('Build Summary') {
             steps {
                 script {
                     echo ""
                     echo "=" * 70
-                    echo "🎉 CI PIPELINE SUMMARY"
+                    echo "CI PIPELINE SUMMARY"
                     echo "=" * 70
-                    echo "📍 Branch: ${env.BRANCH_NAME}"
-                    echo "🔖 Commit: ${env.COMMIT_ID}"
-                    echo "🏷️ Docker Tags: ${env.PRIMARY_TAG}, ${env.SECONDARY_TAG}"
-                    echo "📊 Docker Success Rate: ${env.DOCKER_SUCCESS_COUNT}/${env.DOCKER_TOTAL_COUNT} services"
+                    echo "Branch: ${env.BRANCH_NAME}"
+                    echo "Commit: ${env.COMMIT_ID}"
+                    echo "Docker Tags: ${env.PRIMARY_TAG}, ${env.SECONDARY_TAG}"
+                    echo "Docker Success Rate: ${env.DOCKER_SUCCESS_COUNT}/${env.DOCKER_TOTAL_COUNT} services"
                     echo ""
                     
                     if (env.DOCKER_BUILD_RESULTS) {
@@ -442,7 +442,7 @@ pipeline {
                         def successfulImages = []
                         def failedImages = []
                         
-                        echo "🐳 Docker Build Results:"
+                        echo "Docker Build Results:"
                         dockerResults.each { result ->
                             def parts = result.split(':')
                             def service = parts[0]
@@ -450,10 +450,10 @@ pipeline {
                             
                             if (status == 'SUCCESS') {
                                 successfulImages.add(service)
-                                echo "✅ ${service}"
+                                echo "${service}"
                             } else {
                                 failedImages.add(service)
-                                echo "❌ ${service} - ${status}"
+                                echo "${service} - ${status}"
                             }
                         }
                         
@@ -465,17 +465,17 @@ pipeline {
                         
                         if (failedImages.size() > 0) {
                             echo ""
-                            echo "⚠️ Failed Docker builds: ${failedImages.join(', ')}"
+                            echo "Failed Docker builds: ${failedImages.join(', ')}"
                         }
                     }
                     
                     echo ""
-                    echo "🏁 Pipeline completed at: ${new Date()}"
+                    echo "Pipeline completed at: ${new Date()}"
                 }
             }
         }
 
-        stage('📦 Update Helm Charts repo') {
+        stage('Update Helm Charts repo') {
             when { 
                 expression { 
                     return env.IS_TAG_BUILD.toBoolean() || env.IS_MAIN_BUILD.toBoolean()
@@ -484,7 +484,7 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
                     script {
-                        echo "🔄 Cloning spring-petclinic-config to update image tags"
+                        echo "Cloning spring-petclinic-config to update image tags"
                         sh '''
                             rm -rf spring-petclinic-config || true
                             git clone https://$GITHUB_TOKEN@github.com/Tondeptrai23/spring-petclinic-config.git
@@ -496,14 +496,14 @@ pipeline {
 
                             # For tag builds, update staging environment
                             if [ "${IS_TAG_BUILD}" = "true" ]; then
-                                echo "📦 Updating staging environment with tag ${PRIMARY_TAG}"
+                                echo "Updating staging environment with tag ${PRIMARY_TAG}"
                                 sed -i -E "s/tag: .*/tag: ${PRIMARY_TAG}/g" helm-charts/staging/values.yaml
                                 CHANGED=true
                             fi
 
                             # For main branch builds, update dev environment with commit hash for better traceability
                             if [ "${IS_MAIN_BUILD}" = "true" ]; then
-                                echo "📦 Updating dev environment with tag ${SECONDARY_TAG}"
+                                echo "Updating dev environment with tag ${SECONDARY_TAG}"
                                 sed -i -E "s/tag: .*/tag: ${SECONDARY_TAG}/g" helm-charts/dev/values.yaml
                                 CHANGED=true
                             fi
@@ -525,7 +525,7 @@ pipeline {
                                 git commit -m "$COMMIT_MSG"
                                 git push origin main
                             else
-                                echo '⚠️  No tag changes detected – nothing to commit'
+                                echo 'No tag changes detected – nothing to commit'
                             fi
                         '''
                     }
@@ -538,7 +538,7 @@ pipeline {
         always {
             script {
                 // Cleanup Docker
-                echo "🧹 Cleaning up Docker resources..."
+                echo "Cleaning up Docker resources..."
                 sh '''
                     docker logout || true
                     docker system prune -f || true
@@ -547,19 +547,19 @@ pipeline {
         }
         
         success {
-            echo '🎉 Build, Test, and Docker Push successful!'
+            echo 'Build, Test, and Docker Push successful!'
         }
         
         failure {
-            echo '❌ Build, Test, or Docker Push failed!'
+            echo 'Build, Test, or Docker Push failed!'
         }
         
         unstable {
-            echo '⚠️ Build completed with some test failures!'
+            echo 'Build completed with some test failures!'
         }
         
         cleanup {
-            echo '🧹 Cleaning workspace...'
+            echo 'Cleaning workspace...'
             cleanWs()
         }
     }
