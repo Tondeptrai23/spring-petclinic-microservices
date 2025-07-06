@@ -42,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class VetResourceTest {
 
     @Autowired
-    MockMvc mvc; // test 1
+    MockMvc mvc; // test 2
 
     @MockBean
     VetRepository vetRepository;
